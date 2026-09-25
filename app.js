@@ -10,6 +10,7 @@ const pieceValue = { p:100, n:320, b:330, r:500, q:900, k:0 };
 const pieceOrder = ['q','r','b','n','p'];
 const avatars = ['🤖','🧠','🦊','🐉','👑','🥷','🦉','⚡','🧊','🔥'];
 const STORAGE_KEY = 'pacerChessBotsV02';
+const THEME_KEY = 'pacerChessThemeV02';
 
 const defaultBots = [
   { id:'beginner', name:'Pacer Beginner', avatar:'🤖', strength:500, aggression:50, tactics:45, randomness:35, mistakeRate:24, style:'balanced', locked:true },
@@ -398,9 +399,24 @@ function setupTabs(){
     $('#gameTab').classList.toggle('active',tab.dataset.tab==='game');$('#coachTab').classList.toggle('active',tab.dataset.tab==='coach');
   }));
 }
+function applyTheme(mode){
+  const light = mode === 'light';
+  document.body.classList.toggle('light-mode', light);
+  const toggle = $('#darkModeToggle');
+  if(toggle) toggle.checked = !light;
+}
+function setupTheme(){
+  const saved = localStorage.getItem(THEME_KEY) || 'dark';
+  applyTheme(saved);
+}
 function setupEvents(){
   $('#newGameBtn').addEventListener('click',startNewGame);$('#takebackBtn').addEventListener('click',takeback);$('#hintBtn').addEventListener('click',getHint);$('#flipBtn').addEventListener('click',()=>{flipped=!flipped;renderBoard();});$('#resignBtn').addEventListener('click',resign);$('#playAgainBtn').addEventListener('click',startNewGame);
   $('#clockSelect').addEventListener('change',()=>{if(game.history().length===0)startNewGame();else showToast('Clock setting applies when you start a new game.');});
+  $('#darkModeToggle').addEventListener('change',e=>{
+    const mode=e.target.checked?'dark':'light';
+    localStorage.setItem(THEME_KEY,mode);
+    applyTheme(mode);
+  });
   $('#botManagerBtn').addEventListener('click',()=>{loadBotIntoEditor(currentBot);renderBotList();$('#botDialog').showModal();});
   $('#botForm').addEventListener('submit',saveAndPlayBot);$('#duplicateBotBtn').addEventListener('click',duplicateBot);
   ['strengthInput','aggressionInput','tacticsInput','randomnessInput','mistakeRateInput'].forEach(id=>$('#'+id).addEventListener('input',syncBotSliders));
@@ -408,6 +424,7 @@ function setupEvents(){
 }
 
 loadBots();
+setupTheme();
 setupTabs();
 setupEvents();
 renderAvatarPicker();
