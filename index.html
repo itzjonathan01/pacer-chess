@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#171817" />
-  <meta name="description" content="Pacer Chess 0.3 — adaptive single-player chess training with custom bots, Pacer Elo, and a Nemesis that learns your weaknesses." />
-  <title>Pacer Chess 0.3</title>
+  <meta name="description" content="Pacer Chess 0.4 — Stockfish-powered single-player chess training with adaptive rivals, live analysis, custom bots, and Pacer Elo." />
+  <title>Pacer Chess 0.4</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -15,10 +15,11 @@
         <div class="brand-mark">♞</div>
         <div>
           <div class="brand-title">Pacer Chess</div>
-          <div class="brand-version">0.3 · Adaptive Rival</div>
+          <div class="brand-version">0.4 · Stockfish Core</div>
         </div>
       </div>
       <div class="top-actions">
+        <div id="engineChip" class="engine-chip loading"><span class="engine-pulse"></span><div><b id="engineChipText">ENGINE LOADING</b><small id="engineChipSub">Stockfish 19</small></div></div>
         <div class="elo-chip"><span>PACER ELO</span><strong id="headerElo">400</strong></div>
         <button id="newGameBtn" class="btn btn-primary" type="button">New game</button>
         <button id="botManagerBtn" class="btn" type="button">Bot Lab</button>
@@ -34,6 +35,7 @@
             <div class="player-name-row">
               <strong id="opponentName">Pacer Beginner</strong>
               <span class="rating-pill" id="opponentRating">500</span>
+              <span id="ratedTag" class="rated-tag">RATED</span>
               <span id="nemesisTag" class="nemesis-tag" hidden>NEMESIS</span>
             </div>
             <div class="captured-row" id="botCaptured" aria-label="Pieces captured by the bot"></div>
@@ -70,7 +72,8 @@
         <div class="panel-tabs" role="tablist">
           <button class="tab active" data-tab="game" type="button">Game</button>
           <button class="tab" data-tab="coach" type="button">Coach</button>
-          <button class="tab" data-tab="brain" type="button">Chess Brain</button>
+          <button class="tab" data-tab="brain" type="button">Brain</button>
+          <button class="tab" data-tab="analysis" type="button">Engine</button>
         </div>
 
         <section id="gameTab" class="tab-panel active">
@@ -87,10 +90,12 @@
             <div id="moveList" class="move-list" aria-live="polite"></div>
           </div>
 
-          <div class="control-grid">
+          <div class="control-grid six">
             <button id="takebackBtn" class="control-btn" type="button">↶<span>Takeback</span></button>
             <button id="hintBtn" class="control-btn" type="button">💡<span>Hint</span></button>
+            <button id="threatBtn" class="control-btn" type="button">◉<span>Threats</span></button>
             <button id="flipBtn" class="control-btn" type="button">⇅<span>Flip</span></button>
+            <button id="focusBtn" class="control-btn" type="button">⌗<span>Focus</span></button>
             <button id="resignBtn" class="control-btn danger" type="button">⚑<span>Resign</span></button>
           </div>
 
@@ -111,6 +116,19 @@
                 <option value="600" selected>10 minutes</option>
                 <option value="900">15 minutes</option>
               </select>
+            </label>
+            <label>
+              Board theme
+              <select id="boardThemeSelect">
+                <option value="forest" selected>Forest Dark</option>
+                <option value="slate">Slate</option>
+                <option value="midnight">Midnight Blue</option>
+                <option value="classic">Classic</option>
+              </select>
+            </label>
+            <label class="switch-row">
+              <span>Move sounds</span>
+              <input id="soundToggle" type="checkbox" checked />
             </label>
             <label class="switch-row">
               <span>Learning feedback</span>
@@ -137,7 +155,7 @@
             <div><span>Mistakes</span><strong id="mistakeCount">0</strong></div>
             <div><span>Blunders</span><strong id="blunderCount">0</strong></div>
           </div>
-          <div class="coach-note">Pacer 0.3 tries to infer the idea behind your move — development, attack, defense, king safety, trading, or pressure — and builds a profile over time.</div>
+          <div class="coach-note">Pacer 0.4 combines your move-intent profile with Stockfish analysis. The coach still explains ideas in beginner-friendly language instead of dumping engine numbers at you.</div>
         </section>
 
         <section id="brainTab" class="tab-panel">
@@ -167,6 +185,40 @@
             <div class="brain-row"><div><span>Tactics</span><b id="tacticsScore">50</b></div><div class="brain-track"><i id="tacticsBar"></i></div></div>
             <div class="brain-row"><div><span>King safety</span><b id="kingScore">50</b></div><div class="brain-track"><i id="kingBar"></i></div></div>
             <div class="brain-row"><div><span>Discipline</span><b id="disciplineScore">50</b></div><div class="brain-track"><i id="disciplineBar"></i></div></div>
+          </div>
+        </section>
+
+        <section id="analysisTab" class="tab-panel">
+          <div class="engine-card">
+            <div class="engine-card-head">
+              <div>
+                <div class="identity-kicker">ANALYSIS CORE</div>
+                <strong id="engineName">Stockfish 19</strong>
+              </div>
+              <span id="engineStatusBadge" class="engine-status loading">LOADING</span>
+            </div>
+            <div class="engine-metrics">
+              <div><span>Evaluation</span><strong id="engineEvalLarge">0.0</strong></div>
+              <div><span>Depth</span><strong id="engineDepth">—</strong></div>
+              <div><span>Opening</span><strong id="openingName">Starting position</strong></div>
+            </div>
+          </div>
+
+          <div class="analysis-section">
+            <div class="section-heading">Best lines</div>
+            <div id="engineLines" class="engine-lines">
+              <div class="engine-line muted">Stockfish is loading…</div>
+            </div>
+          </div>
+
+          <div class="analysis-section">
+            <div class="section-heading">Position read</div>
+            <p id="engineExplanation" class="engine-explanation">Once the engine is ready, Pacer will translate its evaluation into a simple explanation.</p>
+          </div>
+
+          <div class="engine-note">
+            <strong>Stockfish 19</strong>
+            <span>Pacer uses the lite single-threaded browser build for fast analysis. If WebAssembly cannot load, it automatically tries the ASM fallback.</span>
           </div>
         </section>
       </aside>
