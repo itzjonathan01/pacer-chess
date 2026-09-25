@@ -1028,7 +1028,6 @@ function chooseBot(bot){
   renderPlayer();
   if($('#botDialog').open) $('#botDialog').close();
   startNewGame();
-initStockfish();
   showToast('Playing '+currentBot.name+'.');
 }
 function saveAndPlayBot(e){
@@ -1255,3 +1254,4 @@ renderBotList();
 syncBotSliders();
 renderBrain();
 startNewGame();
+initStockfish();
