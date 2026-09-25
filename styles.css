@@ -148,3 +148,43 @@ body.light-mode .user-card{background:linear-gradient(90deg,rgba(111,159,66,.11)
   .summary-grid.four{grid-template-columns:repeat(2,1fr)}
   .piece{font-size:clamp(30px,11vw,54px)}
 }
+
+
+/* Pacer Chess 0.4 */
+.panel-tabs{display:grid;grid-template-columns:repeat(4,1fr)}
+.engine-chip{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:7px 10px;min-width:124px}
+.engine-chip b{display:block;font-size:9px;letter-spacing:.08em}.engine-chip small{display:block;font-size:9px;color:var(--muted);margin-top:2px}
+.engine-pulse{width:9px;height:9px;border-radius:50%;background:#c7a74c;box-shadow:0 0 0 4px rgba(199,167,76,.1)}
+.engine-chip.ready .engine-pulse{background:#87c95c;box-shadow:0 0 0 4px rgba(135,201,92,.12)}
+.engine-chip.offline .engine-pulse{background:#d36c62;box-shadow:0 0 0 4px rgba(211,108,98,.12)}
+.rated-tag{font-size:8px;font-weight:900;letter-spacing:.08em;padding:3px 6px;border-radius:999px;background:rgba(134,185,77,.09);border:1px solid rgba(134,185,77,.24);color:#bce28f}
+.rated-tag.unrated{background:rgba(255,255,255,.04);border-color:var(--border);color:var(--muted)}
+.control-grid.six{grid-template-columns:repeat(6,1fr)}
+.control-btn.active{background:#3c4934;box-shadow:inset 0 0 0 1px rgba(134,185,77,.35)}
+.square.threatened::before{content:"";position:absolute;inset:12%;border:3px solid rgba(218,98,88,.72);border-radius:50%;z-index:1;pointer-events:none}
+body.focus-mode .side-panel{display:none}
+body.focus-mode .game-layout{grid-template-columns:minmax(460px,900px);max-width:940px;margin:0 auto}
+body.focus-mode .topbar .engine-chip,body.focus-mode .topbar .elo-chip,body.focus-mode .topbar #botManagerBtn{display:none}
+.engine-card{background:linear-gradient(145deg,#1b201b,#171917);border:1px solid var(--border);border-radius:11px;padding:14px}
+.engine-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.engine-status{font-size:9px;font-weight:900;letter-spacing:.09em;border-radius:999px;padding:5px 8px;border:1px solid var(--border);color:var(--muted)}
+.engine-status.ready{color:#b9df8d;border-color:rgba(134,185,77,.32);background:rgba(134,185,77,.08)}
+.engine-status.offline{color:#e39a91;border-color:rgba(211,108,98,.32);background:rgba(211,108,98,.08)}
+.engine-metrics{display:grid;grid-template-columns:.7fr .55fr 1.5fr;gap:7px;margin-top:12px}
+.engine-metrics>div{background:var(--panel-3);border-radius:8px;padding:10px}
+.engine-metrics span{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em}
+.engine-metrics strong{display:block;margin-top:4px;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.analysis-section{margin-top:14px}
+.engine-lines{display:grid;gap:7px;margin-top:8px}
+.engine-line{display:grid;grid-template-columns:46px 1fr auto;gap:8px;align-items:center;background:var(--panel-3);border-radius:8px;padding:9px 10px;font-size:12px}
+.engine-line .line-eval{font-weight:900;color:#c8e6a2}.engine-line .line-pv{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#d8dbd5}.engine-line .line-depth{font-size:9px;color:var(--muted)}
+.engine-line.muted{display:block;color:var(--muted)}
+.engine-explanation{font-size:12px;line-height:1.5;color:var(--muted);background:var(--panel-3);padding:11px;border-radius:8px;margin:8px 0 0}
+.engine-note{display:grid;gap:4px;margin-top:14px;padding:11px;border:1px solid var(--border);border-radius:8px}
+.engine-note strong{font-size:11px}.engine-note span{font-size:10px;color:var(--muted);line-height:1.45}
+body[data-board-theme="slate"]{--board-light:#737b78;--board-dark:#3f4747;--last-light:#85865c;--last-dark:#5f653f}
+body[data-board-theme="midnight"]{--board-light:#59697b;--board-dark:#2f3e50;--last-light:#757854;--last-dark:#4c5a39}
+body[data-board-theme="classic"]{--board-light:#b7a887;--board-dark:#6c5945;--last-light:#b1a45d;--last-dark:#77683a}
+body.light-mode[data-board-theme="forest"]{--board-light:#aab98b;--board-dark:#657b50}
+@media(max-width:900px){.control-grid.six{grid-template-columns:repeat(3,1fr)}.engine-chip{display:none}}
+@media(max-width:520px){.panel-tabs{grid-template-columns:repeat(4,1fr)}.tab{font-size:10px;padding:12px 4px}.engine-metrics{grid-template-columns:1fr 1fr}.engine-metrics>div:last-child{grid-column:1/-1}}
