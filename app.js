@@ -278,3 +278,139 @@ function capturedPieces(){
   const takenByWhite=[],takenByBlack=[];
   for(const t of pieceOrder){ for(let i=0;i<start.b[t]-now.b[t];i++) takenByWhite.push(pieceGlyph['b'+t]); for(let i=0;i<start.w[t]-now.w[t];i++) takenByBlack.push(pieceGlyph['w'+t]); }
   $('#whiteCaptured').textContent=takenByWhite.join(''); $('#blackCaptured').textContent=takenByBlack.join('');
+}
+function renderEval(){
+  const cp=evaluate(game); const pawns=cp/100;
+  const whitePct=clamp(50 + pawns*5.2,8,92); const blackPct=100-whitePct;
+  $('#evalWhite').style.height=`${whitePct}%`; $('#evalBlack').style.height=`${blackPct}%`;
+  $('#evalText').textContent=(pawns>=0?'+':'')+pawns.toFixed(1);
+}
+function getCheckedKingSquare(){
+  if(!game.inCheck()) return null;
+  const color=game.turn();
+  for(const sq of boardSquares()){const p=game.get(sq);if(p&&p.type==='k'&&p.color===color)return sq;}
+  return null;
+}
+function updateStatus(){
+  let title='Your move',sub='White to move';
+  if(gameEnded){title='Game over';sub='Start a new game when you’re ready.';}
+  else if(thinking){title=`${currentBot.name} is thinking…`;sub='Black to move';}
+  else if(game.inCheck()){title='You are in check';sub='Protect your king.';}
+  $('#statusTitle').textContent=title; $('#statusSub').textContent=sub;
+  $('#takebackBtn').disabled=thinking || game.history().length===0 || gameEnded;
+  $('#hintBtn').disabled=thinking || game.turn()!=='w' || gameEnded;
+}
+function updateCoach(){
+  $('#mistakeCount').textContent=coach.mistakes; $('#blunderCount').textContent=coach.blunders; $('#bestStreak').textContent=coach.bestStreak;
+}
+function renderPlayer(){
+  $('#opponentName').textContent=currentBot.name; $('#opponentAvatar').textContent=currentBot.avatar; $('#opponentRating').textContent=currentBot.strength;
+}
+function renderAll(){renderBoard();renderMoves();capturedPieces();renderEval();renderPlayer();updateStatus();updateClocks();updateCoach();}
+
+function startNewGame(){
+  game=new Chess();selected=null;legalMoves=[];lastMove=null;thinking=false;resigned=false;gameEnded=false;moveReviews=[];coach={mistakes:0,blunders:0,bestStreak:0,currentStreak:0,lastEval:0};
+  const sec=Number($('#clockSelect').value); clockEnabled=sec>0; timers={w:sec,b:sec};
+  $('#coachMessage').textContent='Make a move and I’ll point out tactical ideas, checks, captures, and major mistakes.';
+  if($('#gameOverDialog').open) $('#gameOverDialog').close(); renderAll(); startClockLoop();
+}
+function takeback(){
+  if(thinking || gameEnded || game.history().length===0) return;
+  game.undo(); if(game.turn()==='b' && game.history().length) game.undo();
+  lastMove=null;selected=null;legalMoves=[];
+  const review=moveReviews.pop();
+  if(review?.label==='Blunder') coach.blunders=Math.max(0,coach.blunders-1);
+  if(review?.label==='Mistake') coach.mistakes=Math.max(0,coach.mistakes-1);
+  renderAll(); showToast('Takeback used. Try a different idea.');
+}
+function resign(){
+  if(gameEnded)return; resigned=true;finishGame('You resigned.','Bot wins','🏳️');
+}
+function checkGameEnd(){
+  if(gameEnded)return true;
+  if(game.isCheckmate()){
+    const winner=game.turn()==='w'?'Bot wins':'You win';
+    finishGame('Checkmate.',winner,winner==='You win'?'🏆':'♛'); return true;
+  }
+  if(game.isStalemate()){finishGame('Stalemate.','Draw','🤝');return true;}
+  if(game.isThreefoldRepetition()){finishGame('Threefold repetition.','Draw','🤝');return true;}
+  if(game.isInsufficientMaterial()){finishGame('Insufficient material.','Draw','🤝');return true;}
+  if(game.isDraw()){finishGame('Draw by the fifty-move rule.','Draw','🤝');return true;}
+  return false;
+}
+function finishGame(reason,title,icon){
+  gameEnded=true;thinking=false;clearInterval(timerHandle);timerHandle=null;renderAll();
+  $('#gameOverIcon').textContent=icon;$('#gameOverTitle').textContent=title;$('#gameOverReason').textContent=reason;
+  $('#summaryMistakes').textContent=coach.mistakes;$('#summaryBlunders').textContent=coach.blunders;$('#summaryMoves').textContent=Math.ceil(game.history().length/2);
+  if(!$('#gameOverDialog').open) $('#gameOverDialog').showModal();
+}
+function formatTime(sec){if(!clockEnabled)return '∞';sec=Math.max(0,Math.ceil(sec));return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;}
+function updateClocks(){
+  $('#whiteClock').textContent=formatTime(timers.w);$('#blackClock').textContent=formatTime(timers.b);
+  $('#whiteClock').classList.toggle('active',!gameEnded&&game.turn()==='w');$('#blackClock').classList.toggle('active',!gameEnded&&game.turn()==='b');
+}
+function startClockLoop(){
+  clearInterval(timerHandle);timerHandle=null;if(!clockEnabled)return;
+  let last=performance.now();
+  timerHandle=setInterval(()=>{
+    if(gameEnded)return; const now=performance.now(); const dt=(now-last)/1000; last=now;
+    const side=game.turn(); timers[side]-=dt;
+    if(timers[side]<=0){timers[side]=0;updateClocks();finishGame(`${side==='w'?'You':'The bot'} ran out of time.`,side==='w'?'Bot wins':'You win','⏱️');return;}
+    updateClocks();
+  },200);
+}
+
+function renderAvatarPicker(){
+  const wrap=$('#avatarPicker');wrap.innerHTML='';
+  avatars.forEach(a=>{const b=document.createElement('button');b.type='button';b.className='avatar-choice'+(a===selectedAvatar?' selected':'');b.textContent=a;b.addEventListener('click',()=>{selectedAvatar=a;renderAvatarPicker();});wrap.appendChild(b);});
+}
+function renderBotList(){
+  const list=$('#botList'); list.innerHTML='';
+  bots.forEach(bot=>{
+    const card=document.createElement('div');card.className='bot-card'+(currentBot.id===bot.id?' active':'');
+    const av=document.createElement('div');av.className='bot-card-avatar';av.textContent=bot.avatar;
+    const info=document.createElement('div');info.innerHTML=`<div class="bot-card-name"></div><div class="bot-card-meta"></div>`;info.querySelector('.bot-card-name').textContent=bot.name;info.querySelector('.bot-card-meta').textContent=`${bot.strength} · ${bot.style}`;
+    const play=document.createElement('button');play.type='button';play.textContent='Play';play.addEventListener('click',e=>{e.stopPropagation();chooseBot(bot);});
+    card.append(av,info,play);card.addEventListener('click',()=>loadBotIntoEditor(bot));list.appendChild(card);
+  });
+}
+function loadBotIntoEditor(bot){
+  $('#botNameInput').value=bot.name;$('#strengthInput').value=bot.strength;$('#aggressionInput').value=bot.aggression;$('#tacticsInput').value=bot.tactics;$('#randomnessInput').value=bot.randomness;$('#mistakeRateInput').value=bot.mistakeRate;$('#styleInput').value=bot.style;selectedAvatar=bot.avatar;syncBotSliders();renderAvatarPicker();
+  $('#saveBotBtn').dataset.editing=bot.locked?'':bot.id;
+}
+function syncBotSliders(){
+  $('#strengthValue').textContent=$('#strengthInput').value;$('#aggressionValue').textContent=$('#aggressionInput').value+'%';$('#tacticsValue').textContent=$('#tacticsInput').value+'%';$('#randomnessValue').textContent=$('#randomnessInput').value+'%';$('#mistakeRateValue').textContent=$('#mistakeRateInput').value+'%';
+}
+function editorBot(){
+  return {id:$('#saveBotBtn').dataset.editing||uid(),name:($('#botNameInput').value||'Custom Bot').trim().slice(0,24),avatar:selectedAvatar,strength:+$('#strengthInput').value,aggression:+$('#aggressionInput').value,tactics:+$('#tacticsInput').value,randomness:+$('#randomnessInput').value,mistakeRate:+$('#mistakeRateInput').value,style:$('#styleInput').value,locked:false};
+}
+function chooseBot(bot){currentBot=bot;renderBotList();renderPlayer();$('#botDialog').close();startNewGame();showToast(`Playing ${bot.name}.`);}
+function saveAndPlayBot(e){
+  e.preventDefault();const bot=editorBot();const idx=bots.findIndex(b=>b.id===bot.id);if(idx>=0)bots[idx]=bot;else bots.push(bot);saveCustomBots();currentBot=bot;renderBotList();$('#botDialog').close();startNewGame();showToast(`${bot.name} saved.`);
+}
+function duplicateBot(){
+  const bot=editorBot();bot.id=uid();bot.name=(bot.name+' Copy').slice(0,24);bots.push(bot);saveCustomBots();loadBotIntoEditor(bot);renderBotList();showToast('Bot duplicated.');
+}
+
+function setupTabs(){
+  document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t===tab));
+    $('#gameTab').classList.toggle('active',tab.dataset.tab==='game');$('#coachTab').classList.toggle('active',tab.dataset.tab==='coach');
+  }));
+}
+function setupEvents(){
+  $('#newGameBtn').addEventListener('click',startNewGame);$('#takebackBtn').addEventListener('click',takeback);$('#hintBtn').addEventListener('click',getHint);$('#flipBtn').addEventListener('click',()=>{flipped=!flipped;renderBoard();});$('#resignBtn').addEventListener('click',resign);$('#playAgainBtn').addEventListener('click',startNewGame);
+  $('#clockSelect').addEventListener('change',()=>{if(game.history().length===0)startNewGame();else showToast('Clock setting applies when you start a new game.');});
+  $('#botManagerBtn').addEventListener('click',()=>{loadBotIntoEditor(currentBot);renderBotList();$('#botDialog').showModal();});
+  $('#botForm').addEventListener('submit',saveAndPlayBot);$('#duplicateBotBtn').addEventListener('click',duplicateBot);
+  ['strengthInput','aggressionInput','tacticsInput','randomnessInput','mistakeRateInput'].forEach(id=>$('#'+id).addEventListener('input',syncBotSliders));
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&selected){selected=null;legalMoves=[];renderBoard();}});
+}
+
+loadBots();
+setupTabs();
+setupEvents();
+renderAvatarPicker();
+renderBotList();
+syncBotSliders();
+startNewGame();
