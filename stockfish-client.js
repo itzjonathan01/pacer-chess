@@ -1,7 +1,5 @@
-const RELEASE_BASE = 'https://github.com/nmrugg/stockfish.js/releases/download/v19.0.0/';
-const LITE_JS = RELEASE_BASE + 'stockfish-19-lite-single.js';
-const LITE_WASM = RELEASE_BASE + 'stockfish-19-lite-single.wasm';
-const ASM_JS = RELEASE_BASE + 'stockfish-19-asm.js';
+const LITE_JS = './vendor/stockfish/stockfish-19-lite-single.js';
+const ASM_JS = './vendor/stockfish/stockfish-19-asm.js';
 
 function withTimeout(promise, ms, label){
   let timer;
@@ -44,27 +42,11 @@ export class StockfishClient {
   }
 
   async _createWasmWorker(){
-    const [jsResponse, wasmResponse] = await Promise.all([
-      fetch(LITE_JS, {cache:'force-cache'}),
-      fetch(LITE_WASM, {cache:'force-cache'})
-    ]);
-    if(!jsResponse.ok || !wasmResponse.ok) throw new Error('Could not download Stockfish 19 lite assets');
-
-    let js = await jsResponse.text();
-    const wasm = await wasmResponse.arrayBuffer();
-    const wasmUrl = URL.createObjectURL(new Blob([wasm], {type:'application/wasm'}));
-
-    js = js.split('stockfish-19-lite-single.wasm').join(wasmUrl);
-    const workerUrl = URL.createObjectURL(new Blob([js], {type:'text/javascript'}));
-    return new Worker(workerUrl);
+    return new Worker(LITE_JS);
   }
 
   async _createAsmWorker(){
-    const response = await fetch(ASM_JS, {cache:'force-cache'});
-    if(!response.ok) throw new Error('Could not download Stockfish ASM fallback');
-    const js = await response.text();
-    const workerUrl = URL.createObjectURL(new Blob([js], {type:'text/javascript'}));
-    return new Worker(workerUrl);
+    return new Worker(ASM_JS);
   }
 
   _onMessage(raw){
