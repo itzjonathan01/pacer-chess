@@ -58,3 +58,93 @@ body.light-mode{
 body.light-mode .clock.active{background:#262522;color:#fff}
 body.light-mode .modal::backdrop{background:rgba(0,0,0,.45)}
 body.light-mode .toast{background:#fff;color:#222;border-color:#bbb}
+
+
+/* Pacer Chess 0.3 */
+:root{
+  --bg:#151715;
+  --panel:#1d201d;
+  --panel-2:#272b27;
+  --panel-3:#171a17;
+  --border:#353a35;
+  --text:#f2f4ef;
+  --muted:#9fa69d;
+  --green:#86b94d;
+  --green-dark:#5e8b34;
+  --board-light:#70785d;
+  --board-dark:#3f4938;
+  --last-light:#85864b;
+  --last-dark:#60662f;
+  --selected:#a09c4d;
+}
+body{background:radial-gradient(circle at 50% -10%,#20251f 0,#151715 38%,#111311 100%);min-height:100vh}
+.app-shell{max-width:1420px}
+.topbar{padding:2px 0 8px}
+.top-actions{align-items:center}
+.elo-chip{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 11px}
+.elo-chip span{font-size:9px;color:var(--muted);font-weight:900;letter-spacing:.09em}
+.elo-chip strong{font-size:18px}
+.game-layout{grid-template-columns:minmax(460px,820px) minmax(310px,390px);gap:22px}
+.board-zone{max-width:820px}
+.player-card{padding:10px 3px}
+.bot-card-main{margin-bottom:2px}
+.user-card{margin-top:2px;background:linear-gradient(90deg,rgba(134,185,77,.08),transparent 65%);border-radius:10px}
+.identity-kicker{font-size:10px;font-weight:900;letter-spacing:.12em;color:var(--muted);margin-bottom:3px}
+.you-kicker{color:#a8d875}
+.player-name-row strong{font-size:16px}
+.pacer-rating{border:1px solid rgba(134,185,77,.35);color:#cce8ac;background:rgba(134,185,77,.09)}
+.nemesis-tag{font-size:9px;font-weight:900;letter-spacing:.1em;color:#d6b8ff;background:rgba(155,91,255,.13);border:1px solid rgba(170,110,255,.28);padding:3px 6px;border-radius:999px}
+.clock{background:#232723;border:1px solid #303630;color:#cdd2cb}
+.clock.active{background:#dde3d9;color:#151715;border-color:#edf1ea}
+.board{border-radius:7px;box-shadow:0 18px 45px rgba(0,0,0,.33),0 0 0 1px rgba(255,255,255,.05)}
+.square{isolation:isolate}
+.piece{font-family:"DejaVu Sans","Segoe UI Symbol","Noto Sans Symbols 2",sans-serif;font-size:clamp(34px,6.3vw,72px);font-weight:400;line-height:1;filter:none;text-shadow:none}
+.piece.white-piece{color:#eee9de;-webkit-text-stroke:1.1px #373b35;text-shadow:0 2px 2px rgba(0,0,0,.4)}
+.piece.black-piece{color:#20241f;-webkit-text-stroke:1.1px #aab2a4;text-shadow:0 2px 1px rgba(255,255,255,.08)}
+.square.selected{box-shadow:inset 0 0 0 5px rgba(210,205,91,.8)}
+.side-panel{background:rgba(29,32,29,.96);border-color:#323732;box-shadow:0 18px 50px rgba(0,0,0,.18)}
+.panel-tabs{grid-template-columns:repeat(3,1fr)}
+.tab{font-size:12px;padding:13px 8px}
+.status-card{border:1px solid rgba(255,255,255,.025)}
+.thought-readout{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.thought-readout span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+.thought-readout strong{display:block;margin-top:4px;color:#dcebc9}
+.nemesis-panel{background:linear-gradient(145deg,rgba(107,68,147,.18),rgba(24,26,24,.8));border:1px solid rgba(160,109,219,.22);border-radius:11px;padding:14px}
+.nemesis-head{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.nemesis-orb{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;background:#252027;font-size:24px}
+.nemesis-panel p{color:var(--muted);font-size:12px;line-height:1.45}
+.brain-title{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-top:18px}
+.brain-title p{font-size:12px;color:var(--muted);line-height:1.45;margin:6px 0 0}
+.brain-games{text-align:center;background:var(--panel-3);border-radius:9px;padding:8px 11px;min-width:62px}
+.brain-games strong{display:block;font-size:20px}.brain-games span{display:block;font-size:9px;color:var(--muted);text-transform:uppercase}
+.brain-bars{display:grid;gap:13px;margin-top:16px}
+.brain-row>div:first-child{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px}
+.brain-row span{color:var(--muted)}.brain-row b{font-size:12px}
+.brain-track{height:8px;background:#101210;border:1px solid #2e322e;border-radius:999px;overflow:hidden}
+.brain-track i{display:block;height:100%;width:50%;background:linear-gradient(90deg,#5f8d39,#96c85a);border-radius:999px;transition:width .35s ease}
+.rating-result{margin:14px auto 0;background:var(--panel-3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:inline-flex;gap:8px;align-items:center;color:var(--muted)}
+.rating-result strong{color:var(--text);font-size:20px}.rating-result span{font-weight:900;color:#a9da73}
+.summary-grid.four{grid-template-columns:repeat(4,1fr)}
+.bot-card .nemesis-mini{color:#c8a8f0;font-size:9px;font-weight:900;letter-spacing:.08em}
+.bot-editor input[type="range"]{accent-color:var(--green)}
+body.light-mode{background:#e7e8e4}
+body.light-mode .piece.white-piece{color:#fff;-webkit-text-stroke:1px #777}
+body.light-mode .piece.black-piece{color:#1c1c1c;-webkit-text-stroke:1px #666}
+body.light-mode .user-card{background:linear-gradient(90deg,rgba(111,159,66,.11),transparent 65%)}
+
+@media(max-width:900px){
+  .game-layout{grid-template-columns:1fr}
+  .board-zone{max-width:none}
+  .top-actions{flex-wrap:wrap;justify-content:flex-end}
+}
+@media(max-width:560px){
+  body{padding:8px}
+  .topbar{align-items:flex-start}
+  .elo-chip{order:3}
+  .btn{padding:8px 10px}
+  .clock{font-size:18px;min-width:68px}
+  .player-name-row strong{font-size:14px}
+  .identity-kicker{font-size:9px}
+  .summary-grid.four{grid-template-columns:repeat(2,1fr)}
+  .piece{font-size:clamp(30px,11vw,54px)}
+}
