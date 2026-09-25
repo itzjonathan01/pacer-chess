@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#262522" />
-  <title>Pacer Chess 0.2</title>
+  <meta name="theme-color" content="#171817" />
+  <meta name="description" content="Pacer Chess 0.3 — adaptive single-player chess training with custom bots, Pacer Elo, and a Nemesis that learns your weaknesses." />
+  <title>Pacer Chess 0.3</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -14,31 +15,34 @@
         <div class="brand-mark">♞</div>
         <div>
           <div class="brand-title">Pacer Chess</div>
-          <div class="brand-version">0.2 · Learning build</div>
+          <div class="brand-version">0.3 · Adaptive Rival</div>
         </div>
       </div>
       <div class="top-actions">
-        <button id="newGameBtn" class="btn btn-primary">New game</button>
-        <button id="botManagerBtn" class="btn">Bots</button>
+        <div class="elo-chip"><span>PACER ELO</span><strong id="headerElo">400</strong></div>
+        <button id="newGameBtn" class="btn btn-primary" type="button">New game</button>
+        <button id="botManagerBtn" class="btn" type="button">Bot Lab</button>
       </div>
     </header>
 
     <main class="game-layout">
       <section class="board-zone">
-        <div class="player-card opponent-card">
+        <div class="player-card bot-card-main">
           <div class="avatar" id="opponentAvatar">🤖</div>
           <div class="player-meta">
+            <div class="identity-kicker">BOT · <span id="botSideLabel">BLACK</span></div>
             <div class="player-name-row">
               <strong id="opponentName">Pacer Beginner</strong>
               <span class="rating-pill" id="opponentRating">500</span>
+              <span id="nemesisTag" class="nemesis-tag" hidden>NEMESIS</span>
             </div>
-            <div class="captured-row" id="blackCaptured" aria-label="Pieces captured by black"></div>
+            <div class="captured-row" id="botCaptured" aria-label="Pieces captured by the bot"></div>
           </div>
-          <div class="clock" id="blackClock">10:00</div>
+          <div class="clock" id="botClock">10:00</div>
         </div>
 
         <div class="board-wrap">
-          <div class="eval-wrap" aria-label="Quick evaluation bar">
+          <div class="eval-wrap" aria-label="Position evaluation">
             <div class="eval-bar">
               <div id="evalBlack" class="eval-black"></div>
               <div id="evalWhite" class="eval-white"></div>
@@ -49,15 +53,16 @@
         </div>
 
         <div class="player-card user-card">
-          <div class="avatar user-avatar">🙂</div>
+          <div class="avatar user-avatar">👤</div>
           <div class="player-meta">
+            <div class="identity-kicker you-kicker">YOU · <span id="userSideLabel">WHITE</span></div>
             <div class="player-name-row">
-              <strong>You</strong>
-              <span class="rating-pill">Training</span>
+              <strong>YOU</strong>
+              <span class="rating-pill pacer-rating">Pacer Elo <b id="userRating">400</b></span>
             </div>
-            <div class="captured-row" id="whiteCaptured" aria-label="Pieces captured by white"></div>
+            <div class="captured-row" id="userCaptured" aria-label="Pieces captured by you"></div>
           </div>
-          <div class="clock active" id="whiteClock">10:00</div>
+          <div class="clock active" id="userClock">10:00</div>
         </div>
       </section>
 
@@ -65,6 +70,7 @@
         <div class="panel-tabs" role="tablist">
           <button class="tab active" data-tab="game" type="button">Game</button>
           <button class="tab" data-tab="coach" type="button">Coach</button>
+          <button class="tab" data-tab="brain" type="button">Chess Brain</button>
         </div>
 
         <section id="gameTab" class="tab-panel active">
@@ -72,7 +78,7 @@
             <div class="status-dot"></div>
             <div>
               <div id="statusTitle" class="status-title">Your move</div>
-              <div id="statusSub" class="status-sub">White to move</div>
+              <div id="statusSub" class="status-sub">You are White</div>
             </div>
           </div>
 
@@ -89,6 +95,14 @@
           </div>
 
           <div class="settings-card">
+            <label>
+              Your side
+              <select id="sideSelect">
+                <option value="white" selected>White</option>
+                <option value="black">Black</option>
+                <option value="random">Random</option>
+              </select>
+            </label>
             <label>
               Clock
               <select id="clockSelect">
@@ -114,15 +128,46 @@
             <div class="coach-icon">🧠</div>
             <div>
               <div class="section-heading">Pacer Coach</div>
-              <p id="coachMessage">Make a move and I’ll point out tactical ideas, checks, captures, and major mistakes.</p>
+              <p id="coachMessage">Make a move and I’ll explain what changed.</p>
+              <div class="thought-readout"><span>Pacer thinks your idea was</span><strong id="intentLine">—</strong></div>
             </div>
           </div>
           <div class="coach-stats">
-            <div><span>Best move streak</span><strong id="bestStreak">0</strong></div>
+            <div><span>Best streak</span><strong id="bestStreak">0</strong></div>
             <div><span>Mistakes</span><strong id="mistakeCount">0</strong></div>
             <div><span>Blunders</span><strong id="blunderCount">0</strong></div>
           </div>
-          <div class="coach-note">0.2 uses Pacer’s lightweight browser engine for hints and bot behavior. A future version can swap in Stockfish.</div>
+          <div class="coach-note">Pacer 0.3 tries to infer the idea behind your move — development, attack, defense, king safety, trading, or pressure — and builds a profile over time.</div>
+        </section>
+
+        <section id="brainTab" class="tab-panel">
+          <div class="nemesis-panel">
+            <div class="nemesis-head">
+              <div class="nemesis-orb">🧿</div>
+              <div>
+                <div class="identity-kicker">ADAPTIVE RIVAL</div>
+                <strong>VEX // NEMESIS</strong>
+              </div>
+              <span id="nemesisRating" class="rating-pill">475</span>
+            </div>
+            <p id="nemesisMessage">VEX has not studied enough games yet. Play it and it will begin targeting your weakest area.</p>
+            <button id="playNemesisBtn" class="btn btn-primary" type="button">Play Nemesis</button>
+          </div>
+
+          <div class="brain-title">
+            <div>
+              <div class="section-heading">Your Chess Brain</div>
+              <p id="brainInsight">Play rated games and Pacer will build a model of your habits.</p>
+            </div>
+            <div class="brain-games"><strong id="profileGames">0</strong><span>games</span></div>
+          </div>
+
+          <div class="brain-bars">
+            <div class="brain-row"><div><span>Board vision</span><b id="visionScore">50</b></div><div class="brain-track"><i id="visionBar"></i></div></div>
+            <div class="brain-row"><div><span>Tactics</span><b id="tacticsScore">50</b></div><div class="brain-track"><i id="tacticsBar"></i></div></div>
+            <div class="brain-row"><div><span>King safety</span><b id="kingScore">50</b></div><div class="brain-track"><i id="kingBar"></i></div></div>
+            <div class="brain-row"><div><span>Discipline</span><b id="disciplineScore">50</b></div><div class="brain-track"><i id="disciplineBar"></i></div></div>
+          </div>
         </section>
       </aside>
     </main>
@@ -132,8 +177,8 @@
     <form method="dialog" class="modal-shell" id="botForm">
       <div class="modal-header">
         <div>
-          <h2>Bot Lab</h2>
-          <p>Create bots without touching code.</p>
+          <h2>Bot Lab 2.0</h2>
+          <p>Build a personality, not just an Elo number.</p>
         </div>
         <button class="icon-btn" value="cancel" aria-label="Close bot creator">×</button>
       </div>
@@ -145,14 +190,20 @@
             <div class="input-label">Avatar</div>
             <div id="avatarPicker" class="avatar-picker"></div>
           </div>
-          <label>Strength <span id="strengthValue">500</span>
-            <input id="strengthInput" type="range" min="100" max="1800" step="50" value="500" />
+          <label>Target Elo <span id="strengthValue">500</span>
+            <input id="strengthInput" type="range" min="100" max="2000" step="50" value="500" />
           </label>
           <label>Aggression <span id="aggressionValue">50%</span>
             <input id="aggressionInput" type="range" min="0" max="100" value="50" />
           </label>
           <label>Tactical focus <span id="tacticsValue">45%</span>
             <input id="tacticsInput" type="range" min="0" max="100" value="45" />
+          </label>
+          <label>Positional play <span id="positionValue">50%</span>
+            <input id="positionInput" type="range" min="0" max="100" value="50" />
+          </label>
+          <label>Risk taking <span id="riskValue">50%</span>
+            <input id="riskInput" type="range" min="0" max="100" value="50" />
           </label>
           <label>Randomness <span id="randomnessValue">35%</span>
             <input id="randomnessInput" type="range" min="0" max="100" value="35" />
@@ -176,7 +227,7 @@
         </section>
 
         <section class="bot-library">
-          <div class="section-heading">Your bots</div>
+          <div class="section-heading">Bot roster</div>
           <div id="botList" class="bot-list"></div>
         </section>
       </div>
@@ -188,13 +239,15 @@
       <div class="game-over-icon" id="gameOverIcon">🏁</div>
       <h2 id="gameOverTitle">Game over</h2>
       <p id="gameOverReason"></p>
-      <div class="summary-grid">
+      <div id="ratingResult" class="rating-result">Pacer Elo <strong id="ratingAfter">400</strong> <span id="ratingDelta">+0</span></div>
+      <div class="summary-grid four">
         <div><span>Mistakes</span><strong id="summaryMistakes">0</strong></div>
         <div><span>Blunders</span><strong id="summaryBlunders">0</strong></div>
         <div><span>Moves</span><strong id="summaryMoves">0</strong></div>
+        <div><span>Opponent</span><strong id="summaryOpponent">500</strong></div>
       </div>
       <div class="modal-actions center">
-        <button id="playAgainBtn" class="btn btn-primary" value="default">Play again</button>
+        <button id="playAgainBtn" class="btn btn-primary" value="default">Rematch</button>
         <button class="btn" value="cancel">Close</button>
       </div>
     </form>
