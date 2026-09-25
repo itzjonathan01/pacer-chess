@@ -1,28 +1,51 @@
-# Pacer Chess 0.2
+# Pacer Chess 0.3
 
-A single-player chess learning game built as a static website. It is designed to be easy to host on GitHub Pages.
+Pacer Chess is a dark-first, single-player chess learning game with customizable bots, a personal rating, and an adaptive rival that learns from your games.
 
-## Features
+## What's new in 0.3
 
-- Full legal chess rules powered by chess.js
-- Click-to-move and drag-and-drop pieces
-- Legal move dots and capture rings
-- Last-move highlighting and check highlighting
-- Adjustable clocks, including unlimited games
+- Clear **YOU** and **BOT** identities around the board
+- Your pieces always start visually at the bottom
+- Play as **White, Black, or Random**
+- Pacer Elo that changes after bot games using an Elo-style formula
+- **VEX // Nemesis**, an adaptive rival whose strength rises with your rating
+- Nemesis targets the weakest area in your Chess Brain profile
+- **Chess Brain** profile with:
+  - Board vision
+  - Tactics
+  - King safety
+  - Discipline
+- Pacer attempts to infer the idea behind each move, such as development, king safety, attacking, trading, or gaining space
+- Dark mode is the default and includes a darker board
+- Light and dark pieces are visually distinct
+- Bot Lab 2.0 with target Elo, aggression, tactics, positional play, risk, randomness, mistake rate, style, avatar, duplicate, and saved custom bots
+- Play as Black correctly makes the bot move first
+- Improved responsive UI for desktop and mobile
+
+## Existing game features
+
+- Full legal move handling powered by chess.js
+- Click-to-move and drag-and-drop
+- Legal move indicators
+- Check and last-move highlighting
 - Move history
-- Captured piece display
-- Quick evaluation bar
-- Takebacks, board flip, resign, restart
-- Learning feedback, hints, mistake/blunder tracking
-- Custom bot creator with name, avatar, strength, aggression, tactics, randomness, mistake rate, and style
-- Built-in bot presets
-- Custom bots saved in the browser with localStorage
-- Responsive layout for desktop and mobile
-- GitHub Pages friendly: no backend required
+- Captured pieces
+- Evaluation bar
+- Hints and learning feedback
+- Takebacks
+- Board flip
+- Resign and rematch
+- 5, 10, 15 minute, or unlimited clocks
+- Browser-local saves for custom bots, theme, Pacer Elo, Chess Brain, and Nemesis progress
+- No backend or account required
 
-## Run it
+## Live site
 
-The easiest option is to use a tiny local web server:
+GitHub Pages:
+
+https://itzjonathan01.github.io/pacer-chess/
+
+## Run locally
 
 ```bash
 python -m http.server 8000
@@ -34,17 +57,6 @@ Then open:
 http://localhost:8000
 ```
 
-You can also use VS Code's Live Server extension.
-
-## Put it on GitHub Pages
-
-1. Open **Settings → Pages**.
-2. Under **Build and deployment**, choose **Deploy from a branch**.
-3. Choose `main` and `/ (root)`.
-4. Save.
-
-GitHub will give you the site URL once Pages is deployed.
-
 ## Project structure
 
 ```text
@@ -53,15 +65,16 @@ pacer-chess/
 ├── styles.css
 ├── app.js
 ├── README.md
-└── .gitignore
+├── .gitignore
+└── .nojekyll
 ```
 
-## Notes about the bot engine
+## Engine note
 
-0.2 uses a lightweight browser-side evaluation/search system so the project stays small and works as a static site. Bot ratings are difficulty targets, not officially calibrated Elo ratings.
+0.3 still uses Pacer's lightweight browser-side evaluation/search logic for bot decisions and hints. The UI and training systems are designed so a later release can replace that engine layer with Stockfish/WASM without rebuilding the entire app.
 
-A future version can replace the lightweight bot engine with Stockfish/WASM for stronger analysis while keeping the same UI and Bot Lab.
+Bot Elo values are Pacer difficulty targets, not official Chess.com, USCF, or FIDE ratings.
 
 ## Dependency
 
-The app imports `chess.js` 1.4.0 from jsDelivr in `app.js`, so the browser needs internet access when loading the game. If you want the project completely offline later, vendor the chess.js ESM bundle into the repository and change the import path.
+The app imports `chess.js` 1.4.0 from jsDelivr, so an internet connection is currently required when the page first loads.
