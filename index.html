@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#262522" />
+  <title>Pacer Chess 0.2</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">♞</div>
+        <div>
+          <div class="brand-title">Pacer Chess</div>
+          <div class="brand-version">0.2 · Learning build</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="newGameBtn" class="btn btn-primary">New game</button>
+        <button id="botManagerBtn" class="btn">Bots</button>
+      </div>
+    </header>
+
+    <main class="game-layout">
+      <section class="board-zone">
+        <div class="player-card opponent-card">
+          <div class="avatar" id="opponentAvatar">🤖</div>
+          <div class="player-meta">
+            <div class="player-name-row">
+              <strong id="opponentName">Pacer Beginner</strong>
+              <span class="rating-pill" id="opponentRating">500</span>
+            </div>
+            <div class="captured-row" id="blackCaptured" aria-label="Pieces captured by black"></div>
+          </div>
+          <div class="clock" id="blackClock">10:00</div>
+        </div>
+
+        <div class="board-wrap">
+          <div class="eval-wrap" aria-label="Quick evaluation bar">
+            <div class="eval-bar">
+              <div id="evalBlack" class="eval-black"></div>
+              <div id="evalWhite" class="eval-white"></div>
+            </div>
+            <div id="evalText" class="eval-text">0.0</div>
+          </div>
+          <div id="board" class="board" role="grid" aria-label="Chess board"></div>
+        </div>
+
+        <div class="player-card user-card">
+          <div class="avatar user-avatar">🙂</div>
+          <div class="player-meta">
+            <div class="player-name-row">
+              <strong>You</strong>
+              <span class="rating-pill">Training</span>
+            </div>
+            <div class="captured-row" id="whiteCaptured" aria-label="Pieces captured by white"></div>
+          </div>
+          <div class="clock active" id="whiteClock">10:00</div>
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <div class="panel-tabs" role="tablist">
+          <button class="tab active" data-tab="game" type="button">Game</button>
+          <button class="tab" data-tab="coach" type="button">Coach</button>
+        </div>
+
+        <section id="gameTab" class="tab-panel active">
+          <div id="statusCard" class="status-card">
+            <div class="status-dot"></div>
+            <div>
+              <div id="statusTitle" class="status-title">Your move</div>
+              <div id="statusSub" class="status-sub">White to move</div>
+            </div>
+          </div>
+
+          <div class="move-list-wrap">
+            <div class="section-heading">Moves</div>
+            <div id="moveList" class="move-list" aria-live="polite"></div>
+          </div>
+
+          <div class="control-grid">
+            <button id="takebackBtn" class="control-btn" type="button">↶<span>Takeback</span></button>
+            <button id="hintBtn" class="control-btn" type="button">💡<span>Hint</span></button>
+            <button id="flipBtn" class="control-btn" type="button">⇅<span>Flip</span></button>
+            <button id="resignBtn" class="control-btn danger" type="button">⚑<span>Resign</span></button>
+          </div>
+
+          <div class="settings-card">
+            <label>
+              Clock
+              <select id="clockSelect">
+                <option value="0">Unlimited</option>
+                <option value="300">5 minutes</option>
+                <option value="600" selected>10 minutes</option>
+                <option value="900">15 minutes</option>
+              </select>
+            </label>
+            <label class="switch-row">
+              <span>Learning feedback</span>
+              <input id="learningToggle" type="checkbox" checked />
+            </label>
+          </div>
+        </section>
+
+        <section id="coachTab" class="tab-panel">
+          <div class="coach-card">
+            <div class="coach-icon">🧠</div>
+            <div>
+              <div class="section-heading">Pacer Coach</div>
+              <p id="coachMessage">Make a move and I’ll point out tactical ideas, checks, captures, and major mistakes.</p>
+            </div>
+          </div>
+          <div class="coach-stats">
+            <div><span>Best move streak</span><strong id="bestStreak">0</strong></div>
+            <div><span>Mistakes</span><strong id="mistakeCount">0</strong></div>
+            <div><span>Blunders</span><strong id="blunderCount">0</strong></div>
+          </div>
+          <div class="coach-note">0.2 uses Pacer’s lightweight browser engine for hints and bot behavior. A future version can swap in Stockfish.</div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <dialog id="botDialog" class="modal bot-modal">
+    <form method="dialog" class="modal-shell" id="botForm">
+      <div class="modal-header">
+        <div>
+          <h2>Bot Lab</h2>
+          <p>Create bots without touching code.</p>
+        </div>
+        <button class="icon-btn" value="cancel" aria-label="Close bot creator">×</button>
+      </div>
+
+      <div class="bot-grid">
+        <section class="bot-editor">
+          <label>Bot name<input id="botNameInput" maxlength="24" value="Pacer Beginner" /></label>
+          <div>
+            <div class="input-label">Avatar</div>
+            <div id="avatarPicker" class="avatar-picker"></div>
+          </div>
+          <label>Strength <span id="strengthValue">500</span>
+            <input id="strengthInput" type="range" min="100" max="1800" step="50" value="500" />
+          </label>
+          <label>Aggression <span id="aggressionValue">50%</span>
+            <input id="aggressionInput" type="range" min="0" max="100" value="50" />
+          </label>
+          <label>Tactical focus <span id="tacticsValue">45%</span>
+            <input id="tacticsInput" type="range" min="0" max="100" value="45" />
+          </label>
+          <label>Randomness <span id="randomnessValue">35%</span>
+            <input id="randomnessInput" type="range" min="0" max="100" value="35" />
+          </label>
+          <label>Mistake rate <span id="mistakeRateValue">24%</span>
+            <input id="mistakeRateInput" type="range" min="0" max="45" value="24" />
+          </label>
+          <label>Style
+            <select id="styleInput">
+              <option value="balanced">Balanced</option>
+              <option value="attacker">Attacker</option>
+              <option value="defender">Defender</option>
+              <option value="trader">Piece trader</option>
+              <option value="chaos">Chaos</option>
+            </select>
+          </label>
+          <div class="modal-actions">
+            <button id="saveBotBtn" class="btn btn-primary" value="default">Save & play</button>
+            <button id="duplicateBotBtn" class="btn" value="none" type="button">Duplicate</button>
+          </div>
+        </section>
+
+        <section class="bot-library">
+          <div class="section-heading">Your bots</div>
+          <div id="botList" class="bot-list"></div>
+        </section>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="gameOverDialog" class="modal game-over-modal">
+    <form method="dialog" class="modal-shell compact">
+      <div class="game-over-icon" id="gameOverIcon">🏁</div>
+      <h2 id="gameOverTitle">Game over</h2>
+      <p id="gameOverReason"></p>
+      <div class="summary-grid">
+        <div><span>Mistakes</span><strong id="summaryMistakes">0</strong></div>
+        <div><span>Blunders</span><strong id="summaryBlunders">0</strong></div>
+        <div><span>Moves</span><strong id="summaryMoves">0</strong></div>
+      </div>
+      <div class="modal-actions center">
+        <button id="playAgainBtn" class="btn btn-primary" value="default">Play again</button>
+        <button class="btn" value="cancel">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
