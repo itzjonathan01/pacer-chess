@@ -40,5 +40,6 @@ jobs:
             echo "Stockfish files already current."
           else
             git commit -m "Vendor Stockfish 19 lite engine"
+            git pull --rebase origin main
             git push
           fi
