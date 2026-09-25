@@ -1,0 +1,42 @@
+name: Vendor Stockfish 19
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/vendor-stockfish.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Stockfish 19 Lite
+        run: |
+          set -euxo pipefail
+          mkdir -p vendor/stockfish
+          curl -fL --retry 3 -o vendor/stockfish/stockfish-19-lite-single.js \
+            https://github.com/nmrugg/stockfish.js/releases/download/v19.0.0/stockfish-19-lite-single.js
+          curl -fL --retry 3 -o vendor/stockfish/stockfish-19-lite-single.wasm \
+            https://github.com/nmrugg/stockfish.js/releases/download/v19.0.0/stockfish-19-lite-single.wasm
+          curl -fL --retry 3 -o vendor/stockfish/COPYING.txt \
+            https://raw.githubusercontent.com/nmrugg/stockfish.js/master/Copying.txt
+          test -s vendor/stockfish/stockfish-19-lite-single.js
+          test -s vendor/stockfish/stockfish-19-lite-single.wasm
+
+      - name: Commit vendored engine
+        run: |
+          git config user.name "pacer-chess-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add vendor/stockfish
+          if git diff --cached --quiet; then
+            echo "Stockfish files already current."
+          else
+            git commit -m "Vendor Stockfish 19 lite engine"
+            git push
+          fi
