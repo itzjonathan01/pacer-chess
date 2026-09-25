@@ -24,6 +24,8 @@ jobs:
             https://github.com/nmrugg/stockfish.js/releases/download/v19.0.0/stockfish-19-lite-single.js
           curl -fL --retry 3 -o vendor/stockfish/stockfish-19-lite-single.wasm \
             https://github.com/nmrugg/stockfish.js/releases/download/v19.0.0/stockfish-19-lite-single.wasm
+          curl -fL --retry 3 -o vendor/stockfish/stockfish-19-asm.js \
+            https://github.com/nmrugg/stockfish.js/releases/download/v19.0.0/stockfish-19-asm.js
           curl -fL --retry 3 -o vendor/stockfish/COPYING.txt \
             https://raw.githubusercontent.com/nmrugg/stockfish.js/master/Copying.txt
           test -s vendor/stockfish/stockfish-19-lite-single.js
