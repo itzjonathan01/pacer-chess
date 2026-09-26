@@ -18,6 +18,8 @@ const PROFILE_KEY = 'pacerChessProfileV03';
 const THEME_KEY = 'pacerChessThemeV02';
 const BOARD_THEME_KEY = 'pacerChessBoardThemeV04';
 const SOUND_KEY = 'pacerChessSoundV04';
+const TEST_MODE_KEY = 'pacerChessTestModeV05';
+const COACH_TONE_KEY = 'pacerChessCoachToneV05';
 
 const defaultBots = [
   { id:'beginner', name:'Pacer Beginner', avatar:'🤖', strength:500, aggression:42, tactics:42, position:42, risk:38, randomness:38, mistakeRate:25, style:'balanced', locked:true },
@@ -30,7 +32,7 @@ const defaultBots = [
 
 function freshProfile(){
   return {
-    rating:400, games:0, wins:0, losses:0, draws:0,
+    rating:400, peakRating:400, ratingHistory:[400], games:0, wins:0, losses:0, draws:0,
     moves:0, mistakes:0, blunders:0, checks:0, captures:0, castles:0, developments:0,
     intents:{},
     nemesis:{ games:0, wins:0, losses:0, draws:0, focus:'Board vision' }
@@ -65,6 +67,16 @@ let engineEvalCp = null;
 let engineDepth = null;
 let engineLines = [];
 let engineSerial = 0;
+let testMode = false;
+let coachTone = 'neutral';
+let lastCompletedGame = null;
+let reviewResults = [];
+let reviewRunning = false;
+let trainingMode = false;
+let trainingQueue = [];
+let trainingIndex = 0;
+let trainingTargetUci = null;
+let trainingCurrent = null;
 const stockfish = new StockfishClient();
 
 function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
@@ -77,6 +89,8 @@ function loadProfile(){
     profile = Object.assign(freshProfile(), saved || {});
     profile.intents = Object.assign({}, freshProfile().intents, saved && saved.intents ? saved.intents : {});
     profile.nemesis = Object.assign({}, freshProfile().nemesis, saved && saved.nemesis ? saved.nemesis : {});
+    profile.peakRating = Math.max(profile.rating || 400, profile.peakRating || 400);
+    if(!Array.isArray(profile.ratingHistory) || !profile.ratingHistory.length) profile.ratingHistory=[profile.rating||400];
   }catch{
     profile = freshProfile();
   }
@@ -128,7 +142,55 @@ function squareColor(sq){
   return ((file + rank) % 2 === 0) ? 'dark' : 'light';
 }
 function isUserTurn(){ return !gameEnded && !thinking && game.turn() === userColor; }
-function isRatedGame(){ return !!currentBot && currentBot.locked !== false; }
+function isRatedGame(){ return !!currentBot && currentBot.locked !== false && !testMode && !trainingMode; }
+
+function eloBehaviorText(elo){
+  elo=clamp(Math.round(Number(elo)||0),0,3600);
+  if(elo<=100) return elo+' Elo · mostly random legal moves and very little tactical awareness';
+  if(elo<=300) return elo+' Elo · misses obvious threats and avoids strong engine choices';
+  if(elo<=500) return elo+' Elo · basic ideas, frequent tactical misses';
+  if(elo<=800) return elo+' Elo · sees simple captures and checks, still inconsistent';
+  if(elo<=1200) return elo+' Elo · basic tactics and improving positional play';
+  if(elo<=1600) return elo+' Elo · solid play with regular inaccuracies';
+  if(elo<=2000) return elo+' Elo · strong and tactically reliable';
+  if(elo<=2400) return elo+' Elo · expert-level engine choices with some variety';
+  if(elo<=3000) return elo+' Elo · extremely strong engine play';
+  if(elo<3600) return elo+' Elo · near full Stockfish strength';
+  return '3600 Elo · Stockfish unleashed';
+}
+function makeEloBot(elo){
+  elo=clamp(Math.round(Number(elo)||0),0,3600);
+  const q=elo/3600;
+  return {
+    id:'elo-'+elo,
+    name:'Pacer '+elo,
+    avatar:elo>=3000?'♛':elo>=1800?'🧠':elo>=800?'♞':'🤖',
+    strength:elo,
+    aggression:Math.round(35+q*45),
+    tactics:Math.round(18+q*82),
+    position:Math.round(18+q*82),
+    risk:Math.round(55-q*20),
+    randomness:Math.round(92-q*84),
+    mistakeRate:Math.round(42-q*40),
+    style:'balanced',
+    locked:true,
+    calibrated:true
+  };
+}
+function makeCloneBot(){
+  const s=brainScores();
+  const moves=Math.max(1,profile.moves);
+  const attack=clamp(Math.round(35+(profile.checks/moves)*500+(profile.captures/moves)*80),20,92);
+  const risk=clamp(Math.round(35+(profile.blunders/moves)*350),20,90);
+  const style=attack>68?'attacker':s.discipline>72?'defender':'balanced';
+  return {
+    id:'player-clone',name:'Your Clone',avatar:'🪞',strength:clamp(profile.rating,0,3600),
+    aggression:attack,tactics:s.tactics,position:s.discipline,risk:risk,
+    randomness:clamp(42-Math.round(profile.games*.7),10,42),
+    mistakeRate:clamp(Math.round((profile.mistakes+profile.blunders*2)/moves*100),4,38),
+    style:style,locked:false,clone:true
+  };
+}
 
 function playMoveSound(capture=false){
   if(!soundEnabled) return;
@@ -305,8 +367,17 @@ function tryUserMove(from,to){
   lastMove = {from:move.from,to:move.to};
 
   const after = evaluate(game);
-  reviewUserMove(before,after,move);
   playMoveSound(!!move.captured);
+
+  if(trainingMode){
+    selected=null;
+    legalMoves=[];
+    lastMove={from:move.from,to:move.to};
+    handleTrainingAttempt(move,beforeFen);
+    return;
+  }
+
+  reviewUserMove(before,after,move,beforeFen);
   renderAll();
   if(checkGameEnd()) return;
   queueBotMove();
@@ -427,14 +498,83 @@ function chooseBotMove(){
   const pick = Math.floor(Math.pow(Math.random(),2.2) * Math.min(topK,ranked.length));
   return ranked[pick].m;
 }
+function pickWeakCalibratedMove(bot,engineCandidates){
+  const legal=game.moves({verbose:true});
+  if(!legal.length) return null;
+  const elo=clamp(bot.strength,0,3600);
+  const engineTop=new Set(engineCandidates.slice(0,8).map(c=>c.move.from+c.move.to+(c.move.promotion||'')));
+
+  // Below 1000, intentionally choose from weaker quality bands. This prevents a low-rated
+  // bot from repeatedly inheriting Stockfish's strongest tactical sequence.
+  if(elo<=1000){
+    const ranked=rankMovesFor(game,Object.assign({},bot,{tactics:Math.min(bot.tactics,45)}),botColor);
+    const n=ranked.length;
+    const quality=elo/1200;
+    const center=Math.round((1-quality)*(n-1)*0.78);
+    const spread=elo<=300?Math.max(2,Math.ceil(n*.16)):Math.max(2,Math.ceil(n*.12));
+    let pool=ranked.slice(clamp(center-spread,0,n-1),clamp(center+spread+1,1,n));
+
+    if(elo<=100){
+      const nonTop=pool.filter(x=>!engineTop.has(x.m.from+x.m.to+(x.m.promotion||'')));
+      const quiet=nonTop.filter(x=>!x.m.captured&&!x.m.san.includes('+')&&!x.m.san.includes('#'));
+      pool=quiet.length?quiet:(nonTop.length?nonTop:pool);
+    }else if(elo<=300){
+      const topFive=new Set(engineCandidates.slice(0,5).map(c=>c.move.from+c.move.to+(c.move.promotion||'')));
+      const weaker=pool.filter(x=>!topFive.has(x.m.from+x.m.to+(x.m.promotion||'')));
+      if(weaker.length) pool=weaker;
+    }else if(elo<=500){
+      const topThree=new Set(engineCandidates.slice(0,3).map(c=>c.move.from+c.move.to+(c.move.promotion||'')));
+      const weaker=pool.filter(x=>!topThree.has(x.m.from+x.m.to+(x.m.promotion||'')));
+      if(weaker.length) pool=weaker;
+    }
+
+    return (pool[Math.floor(Math.random()*pool.length)]||ranked[Math.min(center,n-1)]||ranked[n-1]).m;
+  }
+  return null;
+}
+
+function pickCalibratedEngineMove(bot,candidates){
+  if(!candidates.length) return null;
+  const elo=clamp(bot.strength,0,3600);
+
+  if(elo<=1000){
+    const weak=pickWeakCalibratedMove(bot,candidates);
+    if(weak) return weak;
+  }
+
+  const ranges =
+    elo<=1200 ? [2,Math.min(6,candidates.length)] :
+    elo<=1600 ? [1,Math.min(5,candidates.length)] :
+    elo<=2000 ? [0,Math.min(4,candidates.length)] :
+    elo<=2400 ? [0,Math.min(3,candidates.length)] :
+    elo<=3000 ? [0,Math.min(2,candidates.length)] :
+    [0,1];
+
+  let pool=candidates.slice(ranges[0],ranges[1]);
+  if(!pool.length) pool=candidates.slice(0,1);
+
+  for(const c of pool){
+    const personality=styleBonus(c.move,bot)*(elo<1800?.28:.12);
+    const noise=Math.random()*clamp((2200-elo)/8,0,120);
+    c.calibratedScore=-(c.rank-1)*(elo>=2400?170:95)+personality+noise;
+  }
+  pool.sort((a,b)=>b.calibratedScore-a.calibratedScore);
+
+  if(elo>=3200) return candidates[0].move;
+  if(elo>=2600 && Math.random()<.88) return candidates[0].move;
+  if(elo>=2200 && Math.random()<.72) return candidates[0].move;
+  return pool[0].move;
+}
+
 async function chooseBotMovePowered(){
   if(!engineReady) return chooseBotMove();
   const bot=materializeNemesis(currentBot);
   currentBot=bot;
   try{
-    const skill=clamp(Math.round((bot.strength-350)/80),0,20);
-    const movetime=clamp(Math.round(90+bot.strength*.24),100,650);
-    const result=await stockfish.analyze(game.fen(),{movetime:movetime,multiPV:5,skill:skill});
+    const elo=clamp(bot.strength,0,3600);
+    const skill=elo>=3000?20:clamp(Math.round((elo-700)/95),0,20);
+    const movetime=elo>=3200?900:clamp(Math.round(80+elo*.2),90,700);
+    const result=await stockfish.analyze(game.fen(),{movetime:movetime,multiPV:8,skill:skill});
     const candidates=[];
     for(const info of result.lines){
       const uci=info.pv&&info.pv[0];
@@ -446,22 +586,7 @@ async function chooseBotMovePowered(){
       if(move) candidates.push({move:move,rank:1,info:result.lastInfo});
     }
     if(!candidates.length) return chooseBotMove();
-
-    const legal=game.moves({verbose:true});
-    const lowStrengthNoise=clamp((1050-bot.strength)/2,0,420);
-    if(bot.strength<800 && Math.random() < (bot.mistakeRate/100)*.72 && legal.length){
-      const pool=legal.filter(m=>!m.san.includes('#'));
-      return pool[Math.floor(Math.random()*pool.length)]||legal[0];
-    }
-
-    for(const c of candidates){
-      c.personality = styleBonus(c.move,bot)*.55 + Math.random()*(bot.randomness*2.4+lowStrengthNoise);
-      c.total = -(c.rank-1)*125 + c.personality;
-    }
-    candidates.sort((a,b)=>b.total-a.total);
-
-    if(bot.strength<650 && candidates.length>2 && Math.random()<.45) return candidates[Math.min(candidates.length-1,2+Math.floor(Math.random()*2))].move;
-    return candidates[0].move;
+    return pickCalibratedEngineMove(bot,candidates) || chooseBotMove();
   }catch(err){
     console.warn('Stockfish bot search failed; using Pacer fallback',err);
     return chooseBotMove();
@@ -504,7 +629,7 @@ function inferIntent(move){
   if(move.piece === 'k') return 'Improve king safety';
   return 'Improve piece placement and create pressure';
 }
-function reviewUserMove(before,after,move){
+function reviewUserMove(before,after,move,beforeFen){
   const perspective = userColor === 'w' ? 1 : -1;
   const swing = (after-before) * perspective;
   const intent = inferIntent(move);
@@ -538,11 +663,16 @@ function reviewUserMove(before,after,move){
   }
 
   coach.bestStreak = Math.max(coach.bestStreak,coach.currentStreak);
-  moveReviews.push({move:move.san,label:label,swing:swing,intent:intent});
+  moveReviews.push({
+    move:move.san,label:label,swing:swing,intent:intent,
+    beforeFen:beforeFen,afterFen:game.fen(),
+    uci:move.from+move.to+(move.promotion||'')
+  });
 
   if($('#learningToggle').checked){
-    $('#coachMessage').textContent = label + ': ' + msg;
-    if(label === 'Blunder' || label === 'Mistake') showToast(label + ': ' + msg);
+    const feedback=formatCoachFeedback(label,msg);
+    $('#coachMessage').textContent=feedback;
+    if((label==='Blunder'||label==='Mistake') && coachTone!=='minimal') showToast(feedback);
   }
   updateCoach();
 }
@@ -576,6 +706,15 @@ async function getHint(){
 }
 function namePiece(t){
   return ({p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'})[t] || 'piece';
+}
+function formatCoachFeedback(label,msg){
+  if(coachTone==='minimal') return label;
+  if(coachTone==='competitive'){
+    if(label==='Blunder'||label==='Mistake') return label+': '+msg+' Find the correction on the next move.';
+    return label+': '+msg;
+  }
+  if(coachTone==='detailed') return label+': '+msg+' Pacer will save this decision for your post-game review.';
+  return label+': '+msg;
 }
 
 function renderMoves(){
@@ -671,13 +810,15 @@ function renderPlayer(){
   $('#opponentRating').textContent=currentBot.strength;
   $('#nemesisTag').hidden=currentBot.id !== 'nemesis';
   const rated=isRatedGame();
-  $('#ratedTag').textContent=rated?'RATED':'UNRATED';
+  const statusText=testMode?'TEST':rated?'RATED':'UNRATED';
+  $('#ratedTag').textContent=statusText;
   $('#ratedTag').classList.toggle('unrated',!rated);
 
   $('#botSideLabel').textContent=colorName(botColor).toUpperCase();
   $('#userSideLabel').textContent=colorName(userColor).toUpperCase();
   $('#userRating').textContent=profile.rating;
   $('#headerElo').textContent=profile.rating;
+  document.body.classList.toggle('test-mode',testMode);
 }
 function renderAll(){
   renderBoard();
@@ -690,6 +831,7 @@ function renderAll(){
   updateCoach();
   renderBrain();
   renderEnginePanel();
+  renderReviewState();
 }
 
 function resolveSide(){
@@ -704,6 +846,9 @@ function startNewGame(){
   clearInterval(timerHandle);
   timerHandle=null;
 
+  trainingMode=false;
+  document.body.classList.remove('training-active');
+  if($('#trainingDialog').open) $('#trainingDialog').close();
   game=new Chess();
   engineEvalCp=null;
   engineDepth=null;
@@ -715,6 +860,8 @@ function startNewGame(){
   gameEnded=false;
   ratingApplied=false;
   moveReviews=[];
+  reviewResults=[];
+  lastCompletedGame=null;
   coach={mistakes:0,blunders:0,bestStreak:0,currentStreak:0};
   resetGameStats();
 
@@ -800,13 +947,20 @@ function eloDelta(opponentRating,result){
   return Math.round(k*(score-expected));
 }
 function recordGame(result){
-  if(ratingApplied) return {delta:0,rated:isRatedGame()};
+  if(ratingApplied) return {delta:0,rated:isRatedGame(),test:testMode};
   ratingApplied=true;
 
+  if(testMode || trainingMode) return {delta:0,rated:false,test:true};
   const rated=isRatedGame();
   const opponentRating=currentBot.strength;
   const delta=rated?eloDelta(opponentRating,result):0;
-  if(rated) profile.rating=clamp(profile.rating+delta,100,3000);
+  if(rated){
+    profile.rating=clamp(profile.rating+delta,100,3600);
+    profile.peakRating=Math.max(profile.peakRating||profile.rating,profile.rating);
+    if(!Array.isArray(profile.ratingHistory)) profile.ratingHistory=[];
+    profile.ratingHistory.push(profile.rating);
+    if(profile.ratingHistory.length>100) profile.ratingHistory=profile.ratingHistory.slice(-100);
+  }
 
   profile.games++;
   if(result==='win') profile.wins++;
@@ -838,8 +992,18 @@ function finishGame(reason,result,title,icon){
   clearInterval(timerHandle);
   timerHandle=null;
 
+  lastCompletedGame={
+    result:result,reason:reason,title:title,
+    botName:currentBot.name,botRating:currentBot.strength,
+    userColor:userColor,opening:openingName(),
+    moveReviews:moveReviews.map(x=>Object.assign({},x)),
+    history:game.history()
+  };
+
   const rating=recordGame(result);
   renderAll();
+  $('#analyzeGameBtn').disabled=!lastCompletedGame.moveReviews.length;
+  $('#reviewGameBtn').disabled=!lastCompletedGame.moveReviews.length;
 
   $('#gameOverIcon').textContent=icon;
   $('#gameOverTitle').textContent=title;
@@ -849,7 +1013,7 @@ function finishGame(reason,result,title,icon){
   $('#summaryMoves').textContent=Math.ceil(game.history().length/2);
   $('#summaryOpponent').textContent=currentBot.strength;
   $('#ratingAfter').textContent=profile.rating;
-  $('#ratingDelta').textContent=rating.rated?((rating.delta>=0?'+':'')+rating.delta):'UNRATED';
+  $('#ratingDelta').textContent=rating.test?'TEST MODE':rating.rated?((rating.delta>=0?'+':'')+rating.delta):'UNRATED';
   $('#ratingDelta').style.color=rating.rated?(rating.delta>=0?'#a9da73':'#e58a82'):'var(--muted)';
 
   if(!$('#gameOverDialog').open) $('#gameOverDialog').showModal();
@@ -928,6 +1092,14 @@ function renderBrain(){
     insight=advice[s.weakest];
   }
   $('#brainInsight').textContent=insight;
+  $('#profileRecord').textContent=profile.wins+'-'+profile.losses+'-'+profile.draws;
+  $('#peakRating').textContent=profile.peakRating||profile.rating;
+  $('#brainRating').textContent=profile.rating;
+  const clone=makeCloneBot();
+  $('#cloneName').textContent='Your Clone · '+clone.strength;
+  $('#cloneDescription').textContent=profile.games<3
+    ? 'Early version — play a few more games and the clone will copy more of your habits.'
+    : 'Built from your current rating, aggression, tactical profile, discipline, and mistake rate.';
 
   const nemesisBase=bots.find(b=>b.id==='nemesis') || defaultBots.find(b=>b.id==='nemesis');
   const vex=materializeNemesis(nemesisBase);
@@ -1054,14 +1226,181 @@ function duplicateBot(){
   showToast('Bot duplicated.');
 }
 
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  $('#gameTab').classList.toggle('active',name==='game');
+  $('#coachTab').classList.toggle('active',name==='coach');
+  $('#brainTab').classList.toggle('active',name==='brain');
+  $('#analysisTab').classList.toggle('active',name==='analysis');
+  $('#reviewTab').classList.toggle('active',name==='review');
+}
+function renderReviewState(){
+  const analyze=$('#analyzeGameBtn');
+  if(analyze) analyze.disabled=!lastCompletedGame || !lastCompletedGame.moveReviews.length || reviewRunning;
+  if(!lastCompletedGame){
+    $('#reviewHeadline').textContent='Finish a game to review it';
+    $('#reviewSummary').textContent='Pacer will use Stockfish to classify your moves and turn mistakes into training positions.';
+    $('#reviewAccuracy').textContent='—';
+    return;
+  }
+  if(reviewRunning) return;
+  if(reviewResults.length){
+    const bad=reviewResults.filter(r=>r.label==='Mistake'||r.label==='Blunder').length;
+    $('#reviewHeadline').textContent='Review complete · '+lastCompletedGame.opening;
+    $('#reviewSummary').textContent=bad?bad+' major decision'+(bad===1?'':'s')+' can be trained.':'No major mistakes found in the reviewed moves.';
+  }else{
+    $('#reviewHeadline').textContent=lastCompletedGame.title+' vs '+lastCompletedGame.botName;
+    $('#reviewSummary').textContent='Ready for Stockfish review.';
+  }
+}
+function classifyReviewMove(loss,bestMatch){
+  if(bestMatch) return 'Best';
+  if(loss<=20) return 'Excellent';
+  if(loss<=60) return 'Good';
+  if(loss<=120) return 'Inaccuracy';
+  if(loss<=250) return 'Mistake';
+  return 'Blunder';
+}
+function renderReviewResults(){
+  const list=$('#reviewMoveList');
+  list.innerHTML='';
+  if(!reviewResults.length){
+    list.innerHTML='<div class="empty-review">No reviewed moves yet.</div>';
+    return;
+  }
+  let totalLoss=0;
+  reviewResults.forEach((r,i)=>{
+    totalLoss+=Math.min(r.loss,500);
+    const row=document.createElement('div');
+    row.className='review-move '+r.label.toLowerCase()+(r.loss>120?' bad':'');
+    const a=document.createElement('span');a.className='move-index';a.textContent='#'+(i+1);
+    const b=document.createElement('span');b.className='move-san';b.textContent=r.san;
+    const c=document.createElement('span');c.className='move-label';c.textContent=r.label+(r.bestSan&&r.bestSan!==r.san?' · best '+r.bestSan:'');
+    const d=document.createElement('span');d.className='move-loss';d.textContent=r.loss<=5?'≈0':('-'+(r.loss/100).toFixed(1));
+    row.append(a,b,c,d);
+    list.appendChild(row);
+  });
+  const avg=totalLoss/reviewResults.length;
+  const accuracy=clamp(Math.round(100-avg/4.3),0,100);
+  $('#reviewAccuracy').textContent=accuracy+'%';
+  $('#trainMistakesBtn').disabled=!reviewResults.some(r=>r.loss>=80);
+  renderReviewState();
+}
+async function analyzeLastGame(){
+  if(reviewRunning || !lastCompletedGame || !lastCompletedGame.moveReviews.length) return;
+  if(!engineReady){
+    showToast('Stockfish is not ready yet.');
+    return;
+  }
+  reviewRunning=true;
+  reviewResults=[];
+  $('#analyzeGameBtn').disabled=true;
+  $('#trainMistakesBtn').disabled=true;
+  $('#reviewProgress').hidden=false;
+  $('#reviewMoveList').innerHTML='<div class="empty-review">Analyzing your decisions with Stockfish…</div>';
+
+  const items=lastCompletedGame.moveReviews;
+  for(let i=0;i<items.length;i++){
+    const item=items[i];
+    try{
+      const before=await stockfish.analyze(item.beforeFen,{movetime:130,multiPV:1,skill:20});
+      const beforeInfo=before.lines[0]||before.lastInfo;
+      const bestUci=(beforeInfo&&beforeInfo.pv&&beforeInfo.pv[0])||before.bestmove;
+      const after=await stockfish.analyze(item.afterFen,{movetime:130,multiPV:1,skill:20});
+      const afterInfo=after.lines[0]||after.lastInfo;
+      const beforeWhite=infoToWhiteCp(beforeInfo,item.beforeFen);
+      const afterWhite=infoToWhiteCp(afterInfo,item.afterFen);
+      const sign=lastCompletedGame.userColor==='w'?1:-1;
+      const beforeUser=(beforeWhite===null?0:beforeWhite)*sign;
+      const afterUser=(afterWhite===null?0:afterWhite)*sign;
+      const loss=clamp(Math.round(Math.max(0,beforeUser-afterUser)),0,9999);
+      const bestMove=uciToMove(new Chess(item.beforeFen),bestUci);
+      reviewResults.push({
+        san:item.move,uci:item.uci,beforeFen:item.beforeFen,afterFen:item.afterFen,
+        bestUci:bestUci,bestSan:bestMove?bestMove.san:'—',loss:loss,
+        label:classifyReviewMove(loss,item.uci===bestUci),intent:item.intent
+      });
+    }catch(err){
+      console.warn('Review move failed',err);
+      reviewResults.push({
+        san:item.move,uci:item.uci,beforeFen:item.beforeFen,afterFen:item.afterFen,
+        bestUci:null,bestSan:'—',loss:Math.max(0,Math.round(-item.swing)),
+        label:item.label==='Blunder'?'Blunder':item.label==='Mistake'?'Mistake':'Good',intent:item.intent
+      });
+    }
+    const pct=Math.round((i+1)/items.length*100);
+    $('#reviewProgressBar').style.width=pct+'%';
+    $('#reviewProgressText').textContent=(i+1)+' / '+items.length;
+  }
+
+  reviewRunning=false;
+  $('#reviewProgress').hidden=true;
+  $('#analyzeGameBtn').disabled=false;
+  renderReviewResults();
+}
+function startMistakeTraining(){
+  trainingQueue=reviewResults.filter(r=>r.loss>=80&&r.bestUci);
+  if(!trainingQueue.length){
+    showToast('No reviewed mistakes to train.');
+    return;
+  }
+  trainingIndex=0;
+  trainingMode=true;
+  document.body.classList.add('training-active');
+  if(!$('#trainingDialog').open) $('#trainingDialog').show();
+  loadTrainingPosition();
+}
+function loadTrainingPosition(){
+  trainingCurrent=trainingQueue[trainingIndex];
+  if(!trainingCurrent){ stopMistakeTraining(); return; }
+  game=new Chess(trainingCurrent.beforeFen);
+  userColor=game.turn();
+  botColor=opposite(userColor);
+  trainingTargetUci=trainingCurrent.bestUci;
+  thinking=false;
+  gameEnded=false;
+  selected=null;legalMoves=[];lastMove=null;
+  clockEnabled=false;
+  $('#trainingCounter').textContent=(trainingIndex+1)+' / '+trainingQueue.length;
+  $('#trainingFeedback').textContent='Your move';
+  $('#trainingTitle').textContent='Fix '+trainingCurrent.san;
+  $('#trainingPrompt').textContent='Find the better move from this position. Pacer saved it from your last game.';
+  renderAll();
+}
+function handleTrainingAttempt(move,beforeFen){
+  const uci=move.from+move.to+(move.promotion||'');
+  if(uci===trainingTargetUci){
+    $('#trainingFeedback').textContent='Correct · '+move.san;
+    renderAll();
+    setTimeout(()=>{
+      trainingIndex++;
+      if(trainingIndex>=trainingQueue.length){
+        showToast('Mistake training complete.');
+        stopMistakeTraining();
+      }else{
+        loadTrainingPosition();
+      }
+    },650);
+  }else{
+    const best=uciToMove(new Chess(beforeFen),trainingTargetUci);
+    $('#trainingFeedback').textContent='Try again'+(best?' · look for something stronger':'');
+    game=new Chess(beforeFen);
+    selected=null;legalMoves=[];lastMove=null;
+    renderAll();
+  }
+}
+function stopMistakeTraining(){
+  trainingMode=false;
+  trainingQueue=[];
+  trainingCurrent=null;
+  trainingTargetUci=null;
+  document.body.classList.remove('training-active');
+  if($('#trainingDialog').open) $('#trainingDialog').close();
+  startNewGame();
+}
+
 function setupTabs(){
-  document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click',() => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active',t===tab));
-    $('#gameTab').classList.toggle('active',tab.dataset.tab==='game');
-    $('#coachTab').classList.toggle('active',tab.dataset.tab==='coach');
-    $('#brainTab').classList.toggle('active',tab.dataset.tab==='brain');
-    $('#analysisTab').classList.toggle('active',tab.dataset.tab==='analysis');
-  }));
+  document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>switchTab(tab.dataset.tab)));
 }
 function applyTheme(mode){
   const light=mode==='light';
@@ -1076,8 +1415,28 @@ function setupTheme(){
   $('#boardThemeSelect').value=boardTheme;
   soundEnabled=localStorage.getItem(SOUND_KEY)!=='off';
   $('#soundToggle').checked=soundEnabled;
+  testMode=localStorage.getItem(TEST_MODE_KEY)==='on';
+  $('#testModeToggle').checked=testMode;
+  coachTone=localStorage.getItem(COACH_TONE_KEY)||'neutral';
+  $('#coachToneSelect').value=coachTone;
 }
 function setupEvents(){
+  const syncQuickElo=(value)=>{
+    const elo=clamp(Math.round(Number(value)||0),0,3600);
+    $('#quickEloRange').value=elo;
+    $('#quickEloInput').value=elo;
+    $('#quickEloValue').textContent=elo;
+    $('#eloBehaviorText').textContent=eloBehaviorText(elo);
+  };
+  $('#quickEloRange').addEventListener('input',e=>syncQuickElo(e.target.value));
+  $('#quickEloInput').addEventListener('input',e=>syncQuickElo(e.target.value));
+  $('#playEloBtn').addEventListener('click',()=>{
+    const elo=clamp(Math.round(Number($('#quickEloInput').value)||0),0,3600);
+    currentBot=makeEloBot(elo);
+    startNewGame();
+    showToast('Playing calibrated '+elo+' Elo bot.');
+  });
+
   $('#newGameBtn').addEventListener('click',startNewGame);
   $('#takebackBtn').addEventListener('click',takeback);
   $('#hintBtn').addEventListener('click',getHint);
@@ -1117,6 +1476,16 @@ function setupEvents(){
     soundEnabled=e.target.checked;
     localStorage.setItem(SOUND_KEY,soundEnabled?'on':'off');
   });
+  $('#testModeToggle').addEventListener('change',e=>{
+    testMode=e.target.checked;
+    localStorage.setItem(TEST_MODE_KEY,testMode?'on':'off');
+    renderPlayer();
+    showToast(testMode?'Test Mode on — Elo and profile are protected.':'Test Mode off — rated built-in games affect Elo.');
+  });
+  $('#coachToneSelect').addEventListener('change',e=>{
+    coachTone=e.target.value;
+    localStorage.setItem(COACH_TONE_KEY,coachTone);
+  });
 
   $('#botManagerBtn').addEventListener('click',() => {
     loadBotIntoEditor(currentBot);
@@ -1127,6 +1496,15 @@ function setupEvents(){
     const bot=bots.find(b=>b.id==='nemesis');
     if(bot) chooseBot(bot);
   });
+  $('#playCloneBtn').addEventListener('click',()=>chooseBot(makeCloneBot()));
+  $('#reviewGameBtn').addEventListener('click',()=>{
+    if($('#gameOverDialog').open) $('#gameOverDialog').close();
+    switchTab('review');
+    analyzeLastGame();
+  });
+  $('#analyzeGameBtn').addEventListener('click',analyzeLastGame);
+  $('#trainMistakesBtn').addEventListener('click',startMistakeTraining);
+  $('#closeTrainingBtn').addEventListener('click',stopMistakeTraining);
 
   $('#botForm').addEventListener('submit',saveAndPlayBot);
   $('#duplicateBotBtn').addEventListener('click',duplicateBot);
