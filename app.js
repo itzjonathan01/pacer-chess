@@ -461,10 +461,27 @@ function chooseBotMove(){
   const ranked = rankMovesFor(game,bot,botColor);
   if(!ranked.length) return null;
 
-  const strength = bot.strength;
+  const strength = clamp(bot.strength,0,3600);
+
+  // Offline fallback uses the same strength-band idea as the Stockfish path.
+  // Low Elo selects from the middle/lower part of the one-ply ranking instead of
+  // accidentally behaving like a strong engine whenever Stockfish is unavailable.
+  if(strength<=1000){
+    const n=ranked.length;
+    const quality=strength/1200;
+    const center=Math.round((1-quality)*(n-1)*.78);
+    const spread=strength<=300?Math.max(2,Math.ceil(n*.16)):Math.max(2,Math.ceil(n*.12));
+    let pool=ranked.slice(clamp(center-spread,0,n-1),clamp(center+spread+1,1,n));
+    if(strength<=100){
+      const quiet=pool.filter(x=>!x.m.captured&&!x.m.san.includes('+')&&!x.m.san.includes('#'));
+      if(quiet.length) pool=quiet;
+    }
+    return (pool[Math.floor(Math.random()*pool.length)]||ranked[Math.min(center,n-1)]||ranked[n-1]).m;
+  }
+
   let lookahead = 0;
-  if(strength >= 800) lookahead = 1;
-  if(strength >= 1350) lookahead = 2;
+  if(strength >= 1100) lookahead = 1;
+  if(strength >= 1700) lookahead = 2;
 
   if(lookahead){
     const candidates = ranked.slice(0,Math.min(ranked.length,strength>=1350?10:7));
