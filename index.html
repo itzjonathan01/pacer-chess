@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#171817" />
-  <meta name="description" content="Pacer Chess 0.4 — Stockfish-powered single-player chess training with adaptive rivals, live analysis, custom bots, and Pacer Elo." />
-  <title>Pacer Chess 0.4</title>
+  <meta name="description" content="Pacer Chess 0.5 — calibrated 0–3600 Elo bots, Stockfish game review, mistake training, Test Mode, Chess Brain, and adaptive rivals." />
+  <title>Pacer Chess 0.5</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
         <div class="brand-mark">♞</div>
         <div>
           <div class="brand-title">Pacer Chess</div>
-          <div class="brand-version">0.4 · Stockfish Core</div>
+          <div class="brand-version">0.5 · Learn From Every Game</div>
         </div>
       </div>
       <div class="top-actions">
@@ -74,9 +74,26 @@
           <button class="tab" data-tab="coach" type="button">Coach</button>
           <button class="tab" data-tab="brain" type="button">Brain</button>
           <button class="tab" data-tab="analysis" type="button">Engine</button>
+          <button class="tab" data-tab="review" type="button">Review</button>
         </div>
 
         <section id="gameTab" class="tab-panel active">
+          <div class="opponent-picker">
+            <div class="opponent-picker-head">
+              <div>
+                <div class="identity-kicker">INSTANT OPPONENT</div>
+                <strong>Choose any Elo</strong>
+              </div>
+              <div class="elo-range-label"><b id="quickEloValue">500</b><span>ELO</span></div>
+            </div>
+            <input id="quickEloRange" type="range" min="0" max="3600" step="25" value="500" aria-label="Opponent Elo" />
+            <div class="quick-elo-row">
+              <input id="quickEloInput" type="number" min="0" max="3600" step="1" value="500" aria-label="Exact opponent Elo" />
+              <button id="playEloBtn" class="btn btn-primary" type="button">Play this Elo</button>
+            </div>
+            <div id="eloBehaviorText" class="elo-behavior">500 Elo · basic ideas, frequent tactical misses</div>
+          </div>
+
           <div id="statusCard" class="status-card">
             <div class="status-dot"></div>
             <div>
@@ -117,6 +134,19 @@
                 <option value="900">15 minutes</option>
               </select>
             </label>
+            <label class="switch-row test-mode-row">
+              <span><b>Test Mode</b><small>No Elo or profile changes</small></span>
+              <input id="testModeToggle" type="checkbox" />
+            </label>
+            <label>
+              Coach tone
+              <select id="coachToneSelect">
+                <option value="neutral" selected>Neutral</option>
+                <option value="detailed">Detailed</option>
+                <option value="competitive">Competitive</option>
+                <option value="minimal">Minimal</option>
+              </select>
+            </label>
             <label>
               Board theme
               <select id="boardThemeSelect">
@@ -155,7 +185,7 @@
             <div><span>Mistakes</span><strong id="mistakeCount">0</strong></div>
             <div><span>Blunders</span><strong id="blunderCount">0</strong></div>
           </div>
-          <div class="coach-note">Pacer 0.4 combines your move-intent profile with Stockfish analysis. The coach still explains ideas in beginner-friendly language instead of dumping engine numbers at you.</div>
+          <div class="coach-note">Pacer 0.5 keeps feedback neutral by default: what happened, what the better move was, and why. No pity messages and no judgment.</div>
         </section>
 
         <section id="brainTab" class="tab-panel">
@@ -178,6 +208,21 @@
               <p id="brainInsight">Play rated games and Pacer will build a model of your habits.</p>
             </div>
             <div class="brain-games"><strong id="profileGames">0</strong><span>games</span></div>
+          </div>
+
+          <div class="clone-card">
+            <div>
+              <div class="identity-kicker">YOUR CHESS CLONE</div>
+              <strong id="cloneName">Your Clone</strong>
+              <p id="cloneDescription">Pacer will shape this bot from your games, habits, and current rating.</p>
+            </div>
+            <button id="playCloneBtn" class="btn" type="button">Play Clone</button>
+          </div>
+
+          <div class="profile-strip">
+            <div><span>Record</span><strong id="profileRecord">0-0-0</strong></div>
+            <div><span>Peak Elo</span><strong id="peakRating">400</strong></div>
+            <div><span>Current</span><strong id="brainRating">400</strong></div>
           </div>
 
           <div class="brain-bars">
@@ -221,6 +266,31 @@
             <span>Pacer uses the lite single-threaded browser build for fast analysis. If WebAssembly cannot load, it automatically tries the ASM fallback.</span>
           </div>
         </section>
+
+        <section id="reviewTab" class="tab-panel">
+          <div class="review-hero">
+            <div>
+              <div class="identity-kicker">GAME REVIEW</div>
+              <strong id="reviewHeadline">Finish a game to review it</strong>
+              <p id="reviewSummary">Pacer will use Stockfish to classify your moves and turn mistakes into training positions.</p>
+            </div>
+            <div id="reviewAccuracy" class="accuracy-orb">—</div>
+          </div>
+
+          <div class="review-actions">
+            <button id="analyzeGameBtn" class="btn btn-primary" type="button" disabled>Analyze game</button>
+            <button id="trainMistakesBtn" class="btn" type="button" disabled>Train mistakes</button>
+          </div>
+
+          <div id="reviewProgress" class="review-progress" hidden>
+            <div class="review-progress-track"><i id="reviewProgressBar"></i></div>
+            <span id="reviewProgressText">Analyzing…</span>
+          </div>
+
+          <div id="reviewMoveList" class="review-move-list">
+            <div class="empty-review">Your reviewed moves will appear here.</div>
+          </div>
+        </section>
       </aside>
     </main>
   </div>
@@ -243,7 +313,7 @@
             <div id="avatarPicker" class="avatar-picker"></div>
           </div>
           <label>Target Elo <span id="strengthValue">500</span>
-            <input id="strengthInput" type="range" min="100" max="2000" step="50" value="500" />
+            <input id="strengthInput" type="range" min="0" max="3600" step="25" value="500" />
           </label>
           <label>Aggression <span id="aggressionValue">50%</span>
             <input id="aggressionInput" type="range" min="0" max="100" value="50" />
@@ -299,10 +369,25 @@
         <div><span>Opponent</span><strong id="summaryOpponent">500</strong></div>
       </div>
       <div class="modal-actions center">
-        <button id="playAgainBtn" class="btn btn-primary" value="default">Rematch</button>
+        <button id="reviewGameBtn" class="btn btn-primary" value="cancel" type="button">Review game</button>
+        <button id="playAgainBtn" class="btn" value="default">Rematch</button>
         <button class="btn" value="cancel">Close</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="trainingDialog" class="modal training-modal">
+    <div class="modal-shell compact">
+      <div class="training-head">
+        <div>
+          <div class="identity-kicker">MISTAKE TRAINING</div>
+          <h2 id="trainingTitle">Find the better move</h2>
+        </div>
+        <button id="closeTrainingBtn" class="icon-btn" type="button" aria-label="Close training">×</button>
+      </div>
+      <p id="trainingPrompt">This position came from one of your games. Find Stockfish's better move.</p>
+      <div class="training-stats"><span id="trainingCounter">1 / 1</span><span id="trainingFeedback">Your move</span></div>
+    </div>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
